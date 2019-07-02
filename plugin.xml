@@ -18,6 +18,8 @@
       <uses-feature android:name="android.hardware.camera.front" android:required="false" />
     </config-file>
     <source-file src="src/android/QRScanner.java" target-dir="src/com/bitpay/cordova/qrscanner"/>
+    <source-file src="src/android/frame_green.xml" target-dir="res/drawable" />
+    <source-file src="src/android/frame_red.xml" target-dir="res/drawable" />
     <framework src="src/android/qrscanner.gradle" custom="true" type="gradleReference"/>
   </platform>
   <platform name="ios">

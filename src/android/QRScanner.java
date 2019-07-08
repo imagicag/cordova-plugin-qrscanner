@@ -1,6 +1,7 @@
 package com.bitpay.cordova.qrscanner;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.FeatureInfo;
@@ -11,6 +12,7 @@ import android.graphics.Color;
 import android.hardware.Camera;
 import android.hardware.camera2.CameraAccessException;
 import android.net.Uri;
+import android.os.Handler;
 import android.provider.Settings;
 import android.support.v4.app.ActivityCompat;
 import android.util.Log;
@@ -41,6 +43,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
 
 import io.ionic.starter.R;
 
@@ -48,7 +52,7 @@ import io.ionic.starter.R;
 @SuppressWarnings("deprecation")
 public class QRScanner extends CordovaPlugin implements BarcodeCallback {
 
-    public static final String TAG = "QRScanner";
+    public static final String TAG = "CameraQRScanner";
     private CallbackContext callbackContext;
     private boolean cameraClosing;
     private static Boolean flashAvailable;
@@ -99,86 +103,88 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
 
     @Override
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) {
+        Log.d(TAG, "action " + action);
         this.callbackContext = callbackContext;
         readQualityRatio();
         try {
-            if (action.equals("show")) {
-                cordova.getThreadPool().execute(() -> show(callbackContext));
-                return true;
-            } else if (action.equals("scan")) {
-                if (!scanWasCalled) {
-                    cordova.getThreadPool().execute(() -> scan(callbackContext));
-                }
-                scanWasCalled = true;
-                return true;
-            } else if (action.equals("cancelScan")) {
-                return true;
-            } else if (action.equals("openSettings")) {
-                cordova.getThreadPool().execute(() -> openSettings(callbackContext));
-                return true;
-            } else if (action.equals("pausePreview")) {
-                cordova.getThreadPool().execute(() -> pausePreview(callbackContext));
-                return true;
-            } else if (action.equals("useCamera")) {
-                cordova.getThreadPool().execute(() -> switchCamera(callbackContext, args));
-                return true;
-            } else if (action.equals("resumePreview")) {
-                cordova.getThreadPool().execute(() -> resumePreview(callbackContext));
-                return true;
-            } else if (action.equals("hide")) {
-                cordova.getThreadPool().execute(() -> hide(callbackContext));
-                return true;
-            } else if (action.equals("enableLight")) {
-                cordova.getThreadPool().execute(() -> {
-                    while (cameraClosing) {
-                        try {
-                            Thread.sleep(10);
-                        } catch (InterruptedException ignore) {
-                            Log.e(TAG, "execute: ", ignore);
+            ExecutorService threadPool = cordova.getThreadPool();
+            switch (action) {
+                case "show":
+                    threadPool.execute(() -> show(callbackContext));
+                    return true;
+                case "scan":
+                    if (!scanWasCalled) {
+                        scan(callbackContext);
+                    }
+                    scanWasCalled = true;
+                    return true;
+                case "cancelScan":
+                    return true;
+                case "openSettings":
+                    threadPool.execute(() -> openSettings(callbackContext));
+                    return true;
+                case "pausePreview":
+                    threadPool.execute(() -> pausePreview(callbackContext));
+                    return true;
+                case "useCamera":
+                    threadPool.execute(() -> switchCamera(callbackContext, args));
+                    return true;
+                case "resumePreview":
+                    threadPool.execute(() -> resumePreview(callbackContext));
+                    return true;
+                case "hide":
+                    threadPool.execute(() -> hide(callbackContext));
+                    return true;
+                case "enableLight":
+                    threadPool.execute(() -> {
+                        while (cameraClosing) {
+                            try {
+                                Thread.sleep(10);
+                            } catch (InterruptedException ignore) {
+                                Log.e(TAG, "execute: ", ignore);
+                            }
                         }
-                    }
-                    switchFlashOn = true;
-                    if (hasFlash()) {
-                        if (!hasPermission()) {
-                            requestPermission(33);
-                        } else
-                            enableLight(callbackContext);
-                    } else {
-                        callbackContext.error(QRScannerError.LIGHT_UNAVAILABLE);
-                    }
-                });
-                return true;
-            } else if (action.equals("disableLight")) {
-                cordova.getThreadPool().execute(() -> {
-                    switchFlashOff = true;
-                    if (hasFlash()) {
-                        if (!hasPermission()) {
-                            requestPermission(33);
-                        } else
-                            disableLight(callbackContext);
-                    } else {
-                        callbackContext.error(QRScannerError.LIGHT_UNAVAILABLE);
-                    }
-                });
-                return true;
-            } else if (action.equals("prepare")) {
-                cordova.getThreadPool().execute(() -> cordova.getActivity().runOnUiThread(() -> {
+                        switchFlashOn = true;
+                        if (hasFlash()) {
+                            if (!hasPermission()) {
+                                requestPermission(33);
+                            } else
+                                enableLight(callbackContext);
+                        } else {
+                            callbackContext.error(QRScannerError.LIGHT_UNAVAILABLE);
+                        }
+                    });
+                    return true;
+                case "disableLight":
+                    threadPool.execute(() -> {
+                        switchFlashOff = true;
+                        if (hasFlash()) {
+                            if (!hasPermission()) {
+                                requestPermission(33);
+                            } else
+                                disableLight(callbackContext);
+                        } else {
+                            callbackContext.error(QRScannerError.LIGHT_UNAVAILABLE);
+                        }
+                    });
+                    return true;
+                case "prepare":
                     try {
                         currentCameraId = args.getInt(0);
                     } catch (JSONException e) {
                         Log.i(TAG, "Failed to execute action 'prepare'", e);
                     }
                     prepare(callbackContext);
-                }));
-                return true;
-            } else if (action.equals("destroy")) {
-                cordova.getThreadPool().execute(() -> destroy(callbackContext));
-                return true;
-            } else if (action.equals("getStatus")) {
-                cordova.getThreadPool().execute(() -> getStatus(callbackContext));
-                return true;
-            } else {
-                return false;
+                    return true;
+                case "destroy":
+                    destroy(callbackContext);
+                    scanWasCalled = false;
+                    return true;
+                case "getStatus":
+                    threadPool.execute(() -> getStatus(callbackContext));
+                    return true;
+                default:
+                    return false;
             }
         } catch (Exception e) {
             callbackContext.error(QRScannerError.UNEXPECTED_ERROR);
@@ -190,7 +196,7 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
     public void onPause(boolean multitasking) {
         if (previewing) {
             appPausedWithActivePreview = true;
-            pausePreview(null);
+            hide(callbackContext);
         }
     }
 
@@ -198,7 +204,9 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
     public void onResume(boolean multitasking) {
         if (appPausedWithActivePreview) {
             appPausedWithActivePreview = false;
-            resumePreview(null);
+            show(callbackContext);
+            cordova.getActivity().runOnUiThread(() ->
+                    new Handler().postDelayed(() -> scan(callbackContext),1000));
         }
     }
 
@@ -281,14 +289,14 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
         for (int i = 0; i < numCameras; i++) {
             Camera.CameraInfo info = new Camera.CameraInfo();
             Camera.getCameraInfo(i, info);
-            if (info.CAMERA_FACING_FRONT == info.facing) {
+            if (Camera.CameraInfo.CAMERA_FACING_FRONT == info.facing) {
                 return true;
             }
         }
         return false;
     }
 
-    public void switchCamera(CallbackContext callbackContext, JSONArray args) {
+    private void switchCamera(CallbackContext callbackContext, JSONArray args) {
         int cameraId = 0;
 
         try {
@@ -385,13 +393,6 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
         });
     }
 
-    private void makeOpaque() {
-        cordova.getActivity()
-                .runOnUiThread(() -> webView.getView()
-                        .setBackgroundColor(Color.TRANSPARENT));
-        showing = false;
-    }
-
     private boolean hasCamera() {
         return cordova.getActivity()
                 .getPackageManager()
@@ -407,7 +408,11 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
     private void setupCamera(CallbackContext callbackContext) {
         cordova.getActivity().runOnUiThread(() -> {
             // Create our Preview view and set it as the content of our activity.
-            mBarcodeView = new BarcodeView(cordova.getActivity());
+            if (mBarcodeView == null) {
+                mBarcodeView = new BarcodeView(cordova.getActivity());
+            } else {
+                mBarcodeView.setVisibility(View.VISIBLE);
+            }
 
             //Configure the decoder
             ArrayList<BarcodeFormat> formatList = new ArrayList<BarcodeFormat>();
@@ -422,9 +427,12 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
             FrameLayout.LayoutParams cameraPreviewParams =
                     new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
 
-            ((ViewGroup) webView.getView()
-                    .getParent())
-                    .addView(mBarcodeView, cameraPreviewParams);
+
+            if (mBarcodeView.getParent() == null) {
+                ((ViewGroup) webView.getView()
+                        .getParent())
+                        .addView(mBarcodeView, cameraPreviewParams);
+            }
 
             cameraPreviewing = true;
             webView.getView()
@@ -434,14 +442,6 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
         });
         prepared = true;
         previewing = true;
-        if (shouldScanAgain) {
-            scan(callbackContext);
-        }
-    }
-
-    @Override
-    public void possibleResultPoints(List<ResultPoint> resultPoints) {
-        initFrames();
     }
 
     /**
@@ -451,6 +451,11 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
      */
     public void setQualityRatio(float ratio) {
         qualityRatio = ratio;
+    }
+
+    @Override
+    public void possibleResultPoints(List<ResultPoint> resultPoints) {
+        initFrames();
     }
 
     @Override
@@ -511,7 +516,7 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
                 .postDelayed(() -> {
                     clearRedFrame();
                     clearGreenFrame();
-                }, 5_000L);
+                }, 4_000L);
     }
 
     private float calcCurrentRatio(ResultPoint[] points) {
@@ -550,7 +555,8 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
         frameRed.setBackground(resources.getDrawable(R.drawable.frame_red));
         frameRed.setVisibility(View.INVISIBLE);
 
-        ViewGroup parent = (ViewGroup) webView.getView().getParent();
+        ViewGroup parent = (ViewGroup) webView.getView()
+                .getParent();
         parent.addView(frameGreen);
         parent.addView(frameRed);
     }
@@ -625,7 +631,7 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
         side *= (barCodeViewRatio < 1.6) ? 1.2f : 1.15;
         if (barCodeViewRatio < 1.6f) {
             left *= densityAdjustment;
-            top *= 1.2f;
+            top *= 1.25f;
         }
 
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(side, side);
@@ -686,67 +692,23 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
             } else {
                 callbackContext.error(QRScannerError.CAMERA_UNAVAILABLE);
             }
-        } else {
-            prepared = false;
-            cordova.getActivity().runOnUiThread(() -> mBarcodeView.pause());
-            if (cameraPreviewing) {
-                cordova.getActivity().runOnUiThread(() -> {
-                    ((ViewGroup) mBarcodeView.getParent()).removeView(mBarcodeView);
-                    cameraPreviewing = false;
-                });
-
-                previewing = true;
-                lightOn = false;
-            }
-            setupCamera(callbackContext);
-            getStatus(callbackContext);
         }
     }
 
     private void scan(CallbackContext callbackContext) {
         scanning = true;
-        if (!prepared) {
-            shouldScanAgain = true;
-            if (hasCamera()) {
-                if (!hasPermission()) {
-                    requestPermission(33);
-                } else {
-                    setupCamera(callbackContext);
-                }
-            }
-        } else {
-            if (!previewing) {
-                cordova.getActivity().runOnUiThread(() -> {
-                    if (mBarcodeView != null) {
-                        mBarcodeView.resume();
-                        previewing = true;
-                        if (switchFlashOn) {
-                            lightOn = true;
-                        }
-                    }
-                });
-            }
-            shouldScanAgain = true;
-            nextScanCallback = callbackContext;
-            cordova.getActivity().runOnUiThread(() -> {
-                if (mBarcodeView != null) {
-                    mBarcodeView.decodeContinuous(this);
-                }
-            });
-        }
-    }
+        shouldScanAgain = true;
+        Activity activity = cordova.getActivity();
 
-    private void cancelScan(CallbackContext callbackContext) {
-        cordova.getActivity().runOnUiThread(() -> {
-            scanning = false;
-            if (mBarcodeView != null) {
-                mBarcodeView.stopDecoding();
-            }
-        });
-        if (nextScanCallback != null) {
-            nextScanCallback.error(QRScannerError.SCAN_CANCELED);
+        if (prepared) {
+            activity.runOnUiThread(() -> mBarcodeView.resume());
+            previewing = true;
+        } else {
+            prepare(callbackContext);
         }
-        nextScanCallback = null;
+
+        nextScanCallback = callbackContext;
+        activity.runOnUiThread(() -> mBarcodeView.decodeContinuous(this));
     }
 
     private void show(CallbackContext callbackContext) {
@@ -766,10 +728,8 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
                     lightOn = false;
             }
 
-            if (callbackContext != null)
-                getStatus(callbackContext);
-        });
 
+        });
     }
 
     private void resumePreview(CallbackContext callbackContext) {
@@ -863,7 +823,7 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
             canEnableLight = false;
         }
 
-        HashMap status = new HashMap();
+        Map<String, String> status = new HashMap<>();
         status.put("authorized", boolToNumberString(authorized));
         status.put("denied", boolToNumberString(denied));
         status.put("restricted", boolToNumberString(restricted));
@@ -883,37 +843,35 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
     }
 
     private void hide(CallbackContext callbackContext) {
-        makeOpaque();
+        destroy(null);
+        clearGreenFrame();
+        clearRedFrame();
+        cordova.getActivity().runOnUiThread(() -> mBarcodeView.setVisibility(View.GONE));
+        prepared = false;
+        scanWasCalled = false;
         getStatus(callbackContext);
     }
 
+    private void makeOpaque() {
+        cordova.getActivity()
+                .runOnUiThread(() -> webView.getView()
+                        .setBackgroundColor(Color.TRANSPARENT));
+        showing = false;
+    }
+
     private void destroy(CallbackContext callbackContext) {
-        prepared = false;
-        makeOpaque();
-        previewing = false;
-        if (scanning) {
-            cordova.getActivity().runOnUiThread(() -> {
-                scanning = false;
-                if (mBarcodeView != null) {
-                    mBarcodeView.stopDecoding();
-                }
-            });
-            nextScanCallback = null;
+        cordova.getActivity()
+                .runOnUiThread(() -> mBarcodeView.pause());
+
+        if (lightOn && currentCameraId != Camera.CameraInfo.CAMERA_FACING_FRONT) {
+            switchFlash(false, callbackContext);
         }
 
-        if (cameraPreviewing) {
-            cordova.getActivity().runOnUiThread(() -> {
-                ((ViewGroup) mBarcodeView.getParent())
-                        .removeView(mBarcodeView);
-                cameraPreviewing = false;
-            });
+        previewing = false;
+        scanning = false;
+        cameraPreviewing = false;
+        if (callbackContext != null) {
+            getStatus(callbackContext);
         }
-        if (currentCameraId != Camera.CameraInfo.CAMERA_FACING_FRONT) {
-            if (lightOn)
-                switchFlash(false, callbackContext);
-        }
-        closeCamera();
-        currentCameraId = 0;
-        getStatus(callbackContext);
     }
 }

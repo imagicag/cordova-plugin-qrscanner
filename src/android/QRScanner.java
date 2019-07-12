@@ -88,6 +88,7 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
 
 
     private boolean scanWasCalled;
+    private String targetUrl = "imagic.ch";
 
     static class QRScannerError {
         private static final int UNEXPECTED_ERROR = 0,
@@ -206,7 +207,7 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
             appPausedWithActivePreview = false;
             show(callbackContext);
             cordova.getActivity().runOnUiThread(() ->
-                    new Handler().postDelayed(() -> scan(callbackContext),1000));
+                    new Handler().postDelayed(() -> scan(callbackContext), 1000));
         }
     }
 
@@ -466,10 +467,15 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
         initFrames();
         ResultPoint[] points = result.getResultPoints();
         float currentRatio = calcCurrentRatio(points);
-        boolean isAcceptableQrCode = qualityRatio <= currentRatio && currentRatio <= (1 - qualityRatio + 1);
-        if (isAcceptableQrCode) {
+        boolean isAcceptableQuality = qualityRatio <= currentRatio && currentRatio <= (1 - qualityRatio + 1);
+        String resultText = result.getText();
+        boolean matchesTargetUrl = matchesTargetUrl(resultText);
+        if (isAcceptableQuality && matchesTargetUrl) {
             clearRedFrame();
             drawGreenFrame(result);
+        } else if (!matchesTargetUrl) {
+            clearGreenFrame();
+            clearRedFrame();
         } else {
             clearGreenFrame();
             drawRedFrame(result);
@@ -477,24 +483,27 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
 
         clearFramesDelayed();
 
-        String resultText = result.getText();
         boolean isRecognized = resultText != null;
         if (isRecognized) {
             scanning = true;
-            JSONObject scanResult = composePluginResult(result, currentRatio);
+            JSONObject scanResult = composePluginResult(matchesTargetUrl, result, currentRatio);
             String message = scanResult.toString();
             nextScanCallback.success(message);
         }
     }
 
-    private JSONObject composePluginResult(BarcodeResult result, float currentRatio) {
+    private boolean matchesTargetUrl(String resultText) {
+        return resultText != null && resultText.contains(targetUrl);
+    }
+
+    private JSONObject composePluginResult(boolean matchesTargetUrl, BarcodeResult result, float currentRatio) {
         ResultPoint[] points = result.getResultPoints();
         JSONObject data = new JSONObject();
         if (points.length < 4) {
             return data;
         }
         try {
-            String resultText = result.getText();
+            String resultText = matchesTargetUrl ? result.getText() : "";
             JSONArray coordinates = new JSONArray();
             coordinates.put(points[0]);
             coordinates.put(points[1]);

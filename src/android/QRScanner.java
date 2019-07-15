@@ -15,6 +15,7 @@ import android.net.Uri;
 import android.os.Handler;
 import android.provider.Settings;
 import android.support.v4.app.ActivityCompat;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
@@ -106,7 +107,7 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) {
         Log.d(TAG, "action " + action);
         this.callbackContext = callbackContext;
-        readQualityRatio();
+        readSettings();
         try {
             ExecutorService threadPool = cordova.getThreadPool();
             switch (action) {
@@ -211,7 +212,7 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
         }
     }
 
-    private void readQualityRatio() {
+    private void readSettings() {
         cordova.getThreadPool()
                 .submit(() -> {
                     String path = cordova.getContext()
@@ -221,11 +222,18 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
                     File file = new File(path, "qualityParameter.txt");
 
                     try (BufferedReader buffer = new BufferedReader(new FileReader(file))) {
-                        String line = buffer.readLine()
-                                .trim();
+                        List<String> settings = new ArrayList<>();
+                        while (buffer.ready()) {
+                            String line = buffer.readLine();
+                            settings.add(line);
+                        }
 
-                        float ratio = Float.parseFloat(line);
+                        int qualityRatioIndex = 0;
+                        float ratio = Float.parseFloat(settings.get(qualityRatioIndex));
                         setQualityRatio(ratio);
+
+                        int targetUrlIndex = 1;
+                        targetUrl = settings.get(targetUrlIndex);
                     } catch (IOException e) {
                         Log.e(TAG, "Failed to read quality ratio from disk", e);
                     }

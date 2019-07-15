@@ -3,7 +3,8 @@ import AVFoundation
 import UIKit
 import GLKit
 
-let fileName = "qualityParameter.txt"
+
+let fileName = "NoCloud/qualityParameter.txt"
 
 @objc(QRScanner)
 class QRScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
@@ -57,7 +58,6 @@ class QRScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
 
         func addPreviewLayer(_ previewLayer:AVCaptureVideoPreviewLayer?) {
             previewLayer!.videoGravity = AVLayerVideoGravity.resizeAspectFill
-            previewLayer!.frame = self.bounds
             self.layer.addSublayer(previewLayer!)
             self.videoPreviewLayer = previewLayer;
         }
@@ -74,6 +74,7 @@ class QRScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
     var qrCodeLayer: CAShapeLayer = CAShapeLayer()
     var isScanningBarcodeRunning: Bool = false
     var qualityParameter: Double = 0.5
+    var companyURL: String?
 
     var cameraView: CameraView!
     var captureSession:AVCaptureSession?
@@ -165,7 +166,9 @@ class QRScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
                 updateQualityParameter()
 
                 cameraView.backgroundColor = UIColor.clear
-                self.webView!.superview!.insertSubview(cameraView, belowSubview: self.webView!)
+                //self.webView!.superview!.insertSubview(cameraView, belowSubview: self.webView!)
+                //hot fix. atherwise layer wouldn't recognize the coordinates.
+                self.webView!.superview!.insertSubview(cameraView, at: 0)
                 let availableVideoDevices =  AVCaptureDevice.devices(for: AVMediaType.video)
                 for device in availableVideoDevices {
                     if device.position == AVCaptureDevice.Position.back {
@@ -204,8 +207,16 @@ class QRScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
                 metaOutput!.metadataObjectTypes = [AVMetadataObject.ObjectType.qr]
 
                 if cameraView.videoPreviewLayer == nil {
-                    captureVideoPreviewLayer = AVCaptureVideoPreviewLayer(session: captureSession!)
-                    cameraView.addPreviewLayer(captureVideoPreviewLayer)
+                    if let layer = (UIApplication.shared.delegate as? AppDelegate)?.layer {
+                        self.captureVideoPreviewLayer = layer
+                    } else {
+                        let layer = AVCaptureVideoPreviewLayer(session: self.captureSession!)
+                        (UIApplication.shared.delegate as? AppDelegate)?.layer = layer
+                        self.captureVideoPreviewLayer = layer
+                    }
+                    self.cameraView.addPreviewLayer(self.captureVideoPreviewLayer)
+                    let viewToCheck: UIView = self.webView.superview?.subviews.first{$0 is GLKView} ?? self.cameraView
+                    self.captureVideoPreviewLayer?.frame = viewToCheck.frame
                 }
                 captureSession!.startRunning()
                 isScanningBarcodeRunning = true
@@ -306,16 +317,24 @@ class QRScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
                 let relation = barCodeObject.corners.relation() else {
                     return
             }
-            var color = UIColor.green
-            if Double(relation) < qualityParameter {
-                color = UIColor.red
+            var color = UIColor.clear
+            if let companyURL = companyURL, found.stringValue?.contains(companyURL) ?? false {
+                color = UIColor.green
+                if Double(relation) < qualityParameter {
+                    color = UIColor.red
+                }
+            } else {
+                color = UIColor.clear
             }
+
             let viewToCheck: UIView = webView.superview?.subviews.first{$0 is GLKView} ?? cameraView
+            let updatedCorners = barCodeObject.corners
             var inside = false
-            if viewToCheck.frame.contains(barCodeObject.corners) {
-                updateQRCodeLayer(barCodeObject.corners, color: color.cgColor)
-                cameraView.layer.addSublayer(qrCodeLayer)
-                cameraView.setNeedsDisplay()
+            if viewToCheck.frame.contains(updatedCorners) {
+                updateQRCodeLayer(updatedCorners, color: color.cgColor)
+                viewToCheck.layer.addSublayer(qrCodeLayer)
+                //cameraView.layer.addSublayer(qrCodeLayer)
+                //captureVideoPreviewLayer?.addSublayer(qrCodeLayer)
                 inside = true
             }
             let result = QRCodeDataString(coords: barCodeObject.corners, text: found.stringValue, relation: Double(relation), inside: inside.int)
@@ -515,27 +534,7 @@ class QRScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
 
         qrCodeLayer.removeFromSuperlayer()
         self.isScanningBarcodeRunning = false
-
-        if(self.captureSession != nil){
-            self.makeOpaque()
-            backgroundThread(delay: 0, background: {
-
-                //                self.captureSession!.stopRunning()
-                //                self.cameraView.removePreviewLayer()
-                //                self.captureVideoPreviewLayer = nil
-                //                self.metaOutput = nil
-                //                self.captureSession = nil
-
-                self.currentCamera = 0
-                self.frontCamera = nil
-                self.backCamera = nil
-                self.getStatus(command)
-            }, completion: {
-                self.getStatus(command)
-            })
-        } else {
-            self.getStatus(command)
-        }
+        self.getStatus(command)
     }
 
     @objc func getStatus(_ command: CDVInvokedUrlCommand){
@@ -662,13 +661,19 @@ extension QRScanner {
 extension QRScanner {
 
     func updateQualityParameter () {
-        let docURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let docURL = FileManager.default.urls(for: .allLibrariesDirectory, in: .userDomainMask)[0]
         let fileURL = docURL.appendingPathComponent(fileName)
         if FileManager.default.fileExists(atPath: fileURL.path) {
-            if let parameterString = try? String(contentsOf: fileURL, encoding: .utf8),
-                let double = Double(parameterString) {
-                qualityParameter = double
+            if let parameterString = try? String(contentsOf: fileURL, encoding: .utf8)
+            {
+                companyURL = parameterString.components(separatedBy: "\n").last
+                if let quality = parameterString.components(separatedBy: "\n").first,
+                    let doubleValue = Double(quality) {
+                    qualityParameter = doubleValue
+                }
+
             }
+
         }
     }
 

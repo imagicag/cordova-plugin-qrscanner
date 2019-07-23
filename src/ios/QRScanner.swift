@@ -488,9 +488,10 @@ class QRScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
                     do {
                         captureSession!.beginConfiguration()
                         let currentInput = captureSession?.inputs[0] as! AVCaptureDeviceInput
-                        captureSession!.removeInput(currentInput)
-                        let input = try self.createCaptureDeviceInput()
-                        captureSession!.addInput(input)
+
+                        metaInput = currentInput
+                        qrCodeLayer.removeFromSuperlayer()
+
                         captureSession!.commitConfiguration()
                         self.getStatus(command)
                     } catch CaptureError.backCameraUnavailable {

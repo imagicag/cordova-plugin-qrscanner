@@ -75,6 +75,7 @@ class QRScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
     var isScanningBarcodeRunning: Bool = false
     var qualityParameter: Double = 0.5
     var companyURL: String?
+    var jsonToSend: QRCodeDataString?
 
     var cameraView: CameraView!
     var captureSession:AVCaptureSession?
@@ -306,6 +307,7 @@ class QRScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
             return
         }
         qrCodeLayer.removeFromSuperlayer()
+        jsonToSend = nil
         if metadataObjects.count == 0 {
             let pluginResult = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: "")
             // while nothing is detected, or if scanning is false, do nothing.
@@ -337,8 +339,8 @@ class QRScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
                 //captureVideoPreviewLayer?.addSublayer(qrCodeLayer)
                 inside = true
             }
-            let result = QRCodeDataString(coords: barCodeObject.corners, text: found.stringValue, relation: Double(relation), inside: inside.int)
-            if let jsonData = try? JSONEncoder().encode(result),
+            jsonToSend = QRCodeDataString(coords: barCodeObject.corners, text: found.stringValue, relation: Double(relation), inside: inside.int)
+            if let jsonData = try? JSONEncoder().encode(jsonToSend),
                 let jsonString = String(data: jsonData, encoding: .utf8) {
                 print(jsonString)
                 let pluginResult = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: jsonString)
@@ -532,7 +534,6 @@ class QRScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
     }
 
     @objc func destroy(_ command: CDVInvokedUrlCommand) {
-
         qrCodeLayer.removeFromSuperlayer()
         self.isScanningBarcodeRunning = false
         self.getStatus(command)
@@ -679,3 +680,4 @@ extension QRScanner {
     }
 
 }
+

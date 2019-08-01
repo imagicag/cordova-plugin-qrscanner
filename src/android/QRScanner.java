@@ -15,7 +15,6 @@ import android.net.Uri;
 import android.os.Handler;
 import android.provider.Settings;
 import android.support.v4.app.ActivityCompat;
-import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
@@ -23,6 +22,7 @@ import android.widget.FrameLayout;
 
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.ResultPoint;
+import com.google.zxing.common.detector.MathUtils;
 import com.journeyapps.barcodescanner.BarcodeCallback;
 import com.journeyapps.barcodescanner.BarcodeResult;
 import com.journeyapps.barcodescanner.BarcodeView;
@@ -331,7 +331,7 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
         }
     }
 
-    public void onRequestPermissionResult(int requestCode, String[] permissions, int[] grantResults) throws JSONException {
+    public void onRequestPermissionResult(int requestCode, String[] permissions, int[] grantResults) {
         oneTime = false;
         if (requestCode == 33) {
             // for each permission check if the user granted/denied them
@@ -397,7 +397,6 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
             if (mBarcodeView != null) {
                 mBarcodeView.pause();
             }
-
             cameraClosing = false;
         });
     }
@@ -475,29 +474,31 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
         initFrames();
         ResultPoint[] points = result.getResultPoints();
         float currentRatio = calcCurrentRatio(points);
-        boolean isAcceptableQuality = qualityRatio <= currentRatio && currentRatio <= (1 - qualityRatio + 1);
+        boolean isAcceptableQuality = currentRatio >= qualityRatio;
         String resultText = result.getText();
         boolean matchesTargetUrl = matchesTargetUrl(resultText);
-        if (isAcceptableQuality && matchesTargetUrl) {
-            clearRedFrame();
-            drawGreenFrame(result);
-        } else if (!matchesTargetUrl) {
+
+        if (!matchesTargetUrl) {
             clearGreenFrame();
             clearRedFrame();
+
+            return;
+        }
+
+        if (isAcceptableQuality) {
+            clearRedFrame();
+            drawGreenFrame(result);
         } else {
             clearGreenFrame();
             drawRedFrame(result);
         }
 
-        clearFramesDelayed();
+        scanning = true;
+        JSONObject scanResult = composePluginResult(matchesTargetUrl, result, currentRatio);
+        String message = scanResult.toString();
+        nextScanCallback.success(message);
 
-        boolean isRecognized = resultText != null;
-        if (isRecognized) {
-            scanning = true;
-            JSONObject scanResult = composePluginResult(matchesTargetUrl, result, currentRatio);
-            String message = scanResult.toString();
-            nextScanCallback.success(message);
-        }
+        clearFramesDelayed();
     }
 
     private boolean matchesTargetUrl(String resultText) {
@@ -533,7 +534,7 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
                 .postDelayed(() -> {
                     clearRedFrame();
                     clearGreenFrame();
-                }, 4_000L);
+                }, 3_000L);
     }
 
     private float calcCurrentRatio(ResultPoint[] points) {
@@ -549,8 +550,7 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
         double side1 = calcDistanceByPoints(x0, y0, x1, y1);
         double side2 = calcDistanceByPoints(x1, y1, x2, y2);
 
-        float currentRatio = (float) (Math.max(side1, side2) / Math.min(side1, side2));
-        return currentRatio;
+        return (float) (Math.min(side1, side2) / Math.max(side1, side2));
     }
 
     private float calcDistanceByPoints(float x0, float y0, float x1, float y1) {
@@ -606,37 +606,25 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
         Bitmap bitmap = result.getBitmap();
         int bitmapScaleFactor = result.getBitmapScaleFactor();
         int bitmapDensity = bitmap.getDensity();
-        Context context = webView.getContext();
-        float displayDensity = context.getResources()
-                .getDisplayMetrics()
-                .density;
+        float displayDensity = webView.getContext().getResources().getDisplayMetrics().density;
         float densityAdjustment = displayDensity / bitmapScaleFactor;
 
         ResultPoint[] points = result.getResultPoints();
+
         int left = Math.round(calcFrameLeft(points));
-        int top = Math.round(calcFrameTop(points) + bitmapDensity / densityAdjustment);
-
-        float x0 = points[0].getX();
-        float y0 = points[0].getY();
-
-        float x1 = points[1].getX();
-        float y1 = points[1].getY();
-
-        float x2 = points[2].getX();
-        float y2 = points[2].getY();
-
-        int distance1 = Math.round(calcDistanceByPoints(x0, y0, x2, y2));
+        int top = Math.round(calcFrameTop(points) + bitmapDensity);
+        //int top = Math.round(calcFrameTop(points) + bitmapDensity / densityAdjustment);
+        int distance1 = MathUtils.round(ResultPoint.distance(points[0], points[1]));
         int side1 = Math.round(distance1 * displayDensity / bitmapScaleFactor);
 
         int side;
         if (points.length > 3) {
-            float x3 = points[3].getX();
-            float y3 = points[3].getY();
 
-            int distance2 = Math.round(calcDistanceByPoints(x1, y1, x3, y3));
+            int distance2 = MathUtils.round(ResultPoint.distance(points[0], points[3]));
             int side2 = Math.round(distance2 * displayDensity / bitmapScaleFactor);
-
+            Log.d(TAG, "distance2: " + distance2 + " side1 " + side2);
             side = Math.max(side1, side2);
+            Log.d(TAG, "side: " + side);
         } else {
             side = side1;
         }
@@ -645,17 +633,29 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
         float barcodeViewHeight = mBarcodeView.getHeight();
         float barCodeViewRatio = barcodeViewHeight / barcodeViewWidth;
 
-        side *= (barCodeViewRatio < 1.6) ? 1.2f : 1.15;
-        if (barCodeViewRatio < 1.6f) {
+        boolean barCodeRatioLessThanLimit = barCodeViewRatio < 1.6;
+        Log.d(TAG, "barCodeRatioLessThanLimit: " + barCodeRatioLessThanLimit);
+        if (barCodeRatioLessThanLimit) {
             left *= densityAdjustment;
             top *= 1.25f;
+            side *= 1.2f;
+        } else {
+            //TODO dirty hack , need to fix
+            left += (int) Math.round(side * 0.2);
+            //side *= 1.15;
         }
 
+        return generateFrameLayout(top, left, side);
+    }
+
+    private FrameLayout.LayoutParams generateFrameLayout(int top, int left, int side) {
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(side, side);
         params.leftMargin = left;
         params.topMargin = top;
+        Log.d(TAG, "--- final side: " + side + " left " + left + " top " + top + " -----");
         return params;
     }
+
 
     private int calcFrameLeft(ResultPoint[] resultPoints) {
         float x0 = resultPoints[0].getX();
@@ -744,8 +744,6 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
                 if (lightOn)
                     lightOn = false;
             }
-
-
         });
     }
 

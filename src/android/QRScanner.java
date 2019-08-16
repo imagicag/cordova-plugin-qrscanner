@@ -6,8 +6,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.FeatureInfo;
 import android.content.pm.PackageManager;
-import android.content.res.Resources;
-import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.hardware.Camera;
 import android.hardware.camera2.CameraAccessException;
@@ -20,9 +18,9 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 
+import com.cordovaplugincamerapreview.CameraFragment;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.ResultPoint;
-import com.google.zxing.common.detector.MathUtils;
 import com.journeyapps.barcodescanner.BarcodeCallback;
 import com.journeyapps.barcodescanner.BarcodeResult;
 import com.journeyapps.barcodescanner.BarcodeView;
@@ -47,28 +45,28 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 
-import io.ionic.starter.R;
-
+import android.graphics.Rect;
+import android.support.annotation.ColorInt;
 
 @SuppressWarnings("deprecation")
 public class QRScanner extends CordovaPlugin implements BarcodeCallback {
 
     public static final String TAG = "CameraQRScanner";
+    private static final long BORDER_TIME_DELAY = 300L;
     private CallbackContext callbackContext;
     private boolean cameraClosing;
     private static Boolean flashAvailable;
     private boolean lightOn;
     private boolean showing;
     private boolean prepared;
-    private int currentCameraId = Camera.CameraInfo.CAMERA_FACING_BACK;
+    public static int currentCameraId = Camera.CameraInfo.CAMERA_FACING_BACK;
     private String[] permissions = {Manifest.permission.CAMERA};
     //Preview started or paused
     private boolean previewing;
 
     private BarcodeView mBarcodeView;
-    private View frameGreen;
-    private View frameRed;
 
+    private QRCodeView qrCodeView;
     /**
      * Quality ratio (width to height ). It is needed to deffer QR code (square) from other bar codes.
      */
@@ -79,7 +77,6 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
     private boolean cameraPreviewing;
     private boolean scanning;
     private CallbackContext nextScanCallback;
-    private boolean shouldScanAgain;
     private boolean denied;
     private boolean authorized;
     private boolean restricted;
@@ -117,6 +114,8 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
                 case "scan":
                     if (!scanWasCalled) {
                         scan(callbackContext);
+                    } else {
+                        nextScanCallback = callbackContext;
                     }
                     scanWasCalled = true;
                     return true;
@@ -329,6 +328,7 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
         } else {
             prepare(callbackContext);
         }
+        bringQRCodeViewToFront();
     }
 
     public void onRequestPermissionResult(int requestCode, String[] permissions, int[] grantResults) {
@@ -478,19 +478,15 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
         String resultText = result.getText();
         boolean matchesTargetUrl = matchesTargetUrl(resultText);
 
-        if (!matchesTargetUrl) {
-            clearGreenFrame();
-            clearRedFrame();
-
+        if (!matchesTargetUrl || points.length < 4) {
+            clearQRCodeFrame();
             return;
         }
 
         if (isAcceptableQuality) {
-            clearRedFrame();
-            drawGreenFrame(result);
+            drawQRCodeFrame(result, Color.GREEN);
         } else {
-            clearGreenFrame();
-            drawRedFrame(result);
+            drawQRCodeFrame(result, Color.RED);
         }
 
         scanning = true;
@@ -531,11 +527,15 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
     private void clearFramesDelayed() {
         webView.getView()
                 .getHandler()
-                .postDelayed(() -> {
-                    clearRedFrame();
-                    clearGreenFrame();
-                }, 3_000L);
+                .removeCallbacks(clearQRCodeFrameTask);
+        webView.getView()
+                .getHandler()
+                .postDelayed(clearQRCodeFrameTask, BORDER_TIME_DELAY);
     }
+
+    private Runnable clearQRCodeFrameTask = () -> {
+        clearQRCodeFrame();
+    };
 
     private float calcCurrentRatio(ResultPoint[] points) {
         float x0 = points[0].getX();
@@ -558,126 +558,54 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
     }
 
     private void initFrames() {
-        if (frameGreen != null && frameRed != null) {
+        if (qrCodeView != null) {
             return;
         }
+
         Context context = webView.getContext();
-        Resources resources = context.getResources();
-
-        frameGreen = new View(context);
-        frameGreen.setBackground(resources.getDrawable(R.drawable.frame_green));
-        frameGreen.setVisibility(View.INVISIBLE);
-
-        frameRed = new View(context);
-        frameRed.setBackground(resources.getDrawable(R.drawable.frame_red));
-        frameRed.setVisibility(View.INVISIBLE);
-
         ViewGroup parent = (ViewGroup) webView.getView()
                 .getParent();
-        parent.addView(frameGreen);
-        parent.addView(frameRed);
+
+        qrCodeView = new QRCodeView(context);
+        qrCodeView.setDrawAllowed(true);
+        parent.addView(qrCodeView);
     }
 
-    private void drawGreenFrame(BarcodeResult result) {
-        FrameLayout.LayoutParams params = calcFrameLayoutParams(result);
-        frameGreen.setLayoutParams(params);
-        float rotation = calcRotation(result);
-        frameGreen.setRotation(rotation);
-        frameGreen.setVisibility(View.VISIBLE);
+    public void bringQRCodeViewToFront() {
+        if (qrCodeView != null) {
+            cordova.getActivity().runOnUiThread(() -> {
+                qrCodeView.bringToFront();
+            });
+        }
     }
 
-    private void drawRedFrame(BarcodeResult result) {
-        FrameLayout.LayoutParams params = calcFrameLayoutParams(result);
-        frameRed.setLayoutParams(params);
-        float rotation = calcRotation(result);
-        frameRed.setRotation(rotation);
-        frameRed.setVisibility(View.VISIBLE);
-    }
-
-    private float calcRotation(BarcodeResult result) {
-        ResultPoint[] points = result.getResultPoints();
-        float dx = points[1].getX() - points[0].getX();
-        float dy = points[0].getY() - points[1].getY();
-        double atan = Math.atan(dx / dy);
-        return (float) Math.toDegrees(atan);
-    }
-
-    private FrameLayout.LayoutParams calcFrameLayoutParams(BarcodeResult result) {
-        Bitmap bitmap = result.getBitmap();
-        int bitmapScaleFactor = result.getBitmapScaleFactor();
-        int bitmapDensity = bitmap.getDensity();
-        float displayDensity = webView.getContext().getResources().getDisplayMetrics().density;
-        float densityAdjustment = displayDensity / bitmapScaleFactor;
-
-        ResultPoint[] points = result.getResultPoints();
-
-        int left = Math.round(calcFrameLeft(points));
-        int top = Math.round(calcFrameTop(points) + bitmapDensity);
-        //int top = Math.round(calcFrameTop(points) + bitmapDensity / densityAdjustment);
-        int distance1 = MathUtils.round(ResultPoint.distance(points[0], points[1]));
-        int side1 = Math.round(distance1 * displayDensity / bitmapScaleFactor);
-
-        int side;
-        if (points.length > 3) {
-
-            int distance2 = MathUtils.round(ResultPoint.distance(points[0], points[3]));
-            int side2 = Math.round(distance2 * displayDensity / bitmapScaleFactor);
-            Log.d(TAG, "distance2: " + distance2 + " side1 " + side2);
-            side = Math.max(side1, side2);
-            Log.d(TAG, "side: " + side);
-        } else {
-            side = side1;
+    private void drawQRCodeFrame(BarcodeResult result, @ColorInt int color) {
+        Rect viewRect = mBarcodeView.getFramingRect();
+        ResultPoint[] pointsToDraw = result.getResultPoints();
+        if (currentCameraId == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+            for(int i = 0; i < pointsToDraw.length; i++) {
+                pointsToDraw[i] = new ResultPoint(pointsToDraw[i].getX(), viewRect.height() - pointsToDraw[i].getY());
+            }
         }
 
-        float barcodeViewWidth = mBarcodeView.getWidth();
-        float barcodeViewHeight = mBarcodeView.getHeight();
-        float barCodeViewRatio = barcodeViewHeight / barcodeViewWidth;
+        qrCodeView.setDrawAllowed(true);
+        qrCodeView.update(result.getResultPoints(), viewRect.left, viewRect.top, color );
+    }
 
-        boolean barCodeRatioLessThanLimit = barCodeViewRatio < 1.6;
-        Log.d(TAG, "barCodeRatioLessThanLimit: " + barCodeRatioLessThanLimit);
-        if (barCodeRatioLessThanLimit) {
-            left *= densityAdjustment;
-            top *= 1.25f;
-            side *= 1.2f;
-        } else {
-            //TODO dirty hack , need to fix
-            left += (int) Math.round(side * 0.2);
-            //side *= 1.15;
+
+
+    private void clearQRCodeFrame() {
+        if(CameraFragment.canTakePicture) {//false if taking picture in progress
+            nextScanCallback.success("");
         }
-
-        return generateFrameLayout(top, left, side);
+        cordova.getActivity().runOnUiThread(() -> {
+            if (qrCodeView != null) {
+                qrCodeView.setDrawAllowed(false);
+                qrCodeView.invalidate();
+            }
+        });
     }
 
-    private FrameLayout.LayoutParams generateFrameLayout(int top, int left, int side) {
-        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(side, side);
-        params.leftMargin = left;
-        params.topMargin = top;
-        Log.d(TAG, "--- final side: " + side + " left " + left + " top " + top + " -----");
-        return params;
-    }
-
-
-    private int calcFrameLeft(ResultPoint[] resultPoints) {
-        float x0 = resultPoints[0].getX();
-        float x1 = resultPoints[1].getX();
-        float min = Math.min(x0, x1);
-        return Math.round(min);
-    }
-
-    private int calcFrameTop(ResultPoint[] points) {
-        float y1 = points[1].getY();
-        float y2 = points[2].getY();
-        float min = Math.min(y1, y2);
-        return Math.round(min);
-    }
-
-    private void clearGreenFrame() {
-        frameGreen.setVisibility(View.INVISIBLE);
-    }
-
-    private void clearRedFrame() {
-        frameRed.setVisibility(View.INVISIBLE);
-    }
 
     // ---- BEGIN EXTERNAL API ----
     private void prepare(CallbackContext callbackContext) {
@@ -714,7 +642,6 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
 
     private void scan(CallbackContext callbackContext) {
         scanning = true;
-        shouldScanAgain = true;
         Activity activity = cordova.getActivity();
 
         if (prepared) {
@@ -859,8 +786,7 @@ public class QRScanner extends CordovaPlugin implements BarcodeCallback {
 
     private void hide(CallbackContext callbackContext) {
         destroy(null);
-        clearGreenFrame();
-        clearRedFrame();
+        clearQRCodeFrame();
         cordova.getActivity().runOnUiThread(() -> mBarcodeView.setVisibility(View.GONE));
         prepared = false;
         scanWasCalled = false;

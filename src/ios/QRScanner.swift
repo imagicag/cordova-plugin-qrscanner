@@ -332,7 +332,7 @@ class QRScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
             let viewToCheck: UIView = webView.superview?.subviews.first{$0 is GLKView} ?? cameraView
             let updatedCorners = barCodeObject.corners
             var inside = false
-            if viewToCheck.frame.contains(updatedCorners) {
+            if viewToCheck.bounds.contains(updatedCorners) {
                 updateQRCodeLayer(updatedCorners, color: color.cgColor)
                 viewToCheck.layer.addSublayer(qrCodeLayer)
                 //cameraView.layer.addSublayer(qrCodeLayer)

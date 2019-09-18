@@ -19,6 +19,18 @@
     </config-file>
     <source-file src="src/android/QRScanner.java" target-dir="src/com/bitpay/cordova/qrscanner"/>
     <source-file src="src/android/QRCodeView.java" target-dir="src/com/bitpay/cordova/qrscanner"/>
+    <source-file src="src/android/BarcodeGraphic.java" target-dir="src/com/bitpay/cordova/qrscanner"/>
+    <source-file src="src/android/BarcodeScanningProcessor.java" target-dir="src/com/bitpay/cordova/qrscanner"/>
+    <source-file src="src/android/BitmapUtils.java" target-dir="src/com/bitpay/cordova/qrscanner"/>
+    <source-file src="src/android/CameraImageGraphic.java" target-dir="src/com/bitpay/cordova/qrscanner"/>
+    <source-file src="src/android/CameraImageGraphic.java" target-dir="src/com/bitpay/cordova/qrscanner"/>
+    <source-file src="src/android/CameraSourcePreview.java" target-dir="src/com/bitpay/cordova/qrscanner"/>
+    <source-file src="src/android/CameraUtils.java" target-dir="src/com/bitpay/cordova/qrscanner"/>
+    <source-file src="src/android/CommonData.java" target-dir="src/com/bitpay/cordova/qrscanner"/>
+    <source-file src="src/android/FrameMetadata.java" target-dir="src/com/bitpay/cordova/qrscanner"/>
+    <source-file src="src/android/GraphicOverlay.java" target-dir="src/com/bitpay/cordova/qrscanner"/>
+    <source-file src="src/android/VisionImageProcessor.java" target-dir="src/com/bitpay/cordova/qrscanner"/>
+    <source-file src="src/android/VisionProcessorBase.java" target-dir="src/com/bitpay/cordova/qrscanner"/>
     <source-file src="src/android/frame_green.xml" target-dir="res/drawable" />
     <source-file src="src/android/frame_red.xml" target-dir="res/drawable" />
     <framework src="src/android/qrscanner.gradle" custom="true" type="gradleReference"/>

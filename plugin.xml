@@ -23,7 +23,7 @@
     <source-file src="src/android/BarcodeScanningProcessor.java" target-dir="src/com/bitpay/cordova/qrscanner"/>
     <source-file src="src/android/BitmapUtils.java" target-dir="src/com/bitpay/cordova/qrscanner"/>
     <source-file src="src/android/CameraImageGraphic.java" target-dir="src/com/bitpay/cordova/qrscanner"/>
-    <source-file src="src/android/CameraImageGraphic.java" target-dir="src/com/bitpay/cordova/qrscanner"/>
+    <source-file src="src/android/CameraSource.java" target-dir="src/com/bitpay/cordova/qrscanner"/>
     <source-file src="src/android/CameraSourcePreview.java" target-dir="src/com/bitpay/cordova/qrscanner"/>
     <source-file src="src/android/CameraUtils.java" target-dir="src/com/bitpay/cordova/qrscanner"/>
     <source-file src="src/android/CommonData.java" target-dir="src/com/bitpay/cordova/qrscanner"/>

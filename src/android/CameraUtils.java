@@ -1,30 +1,19 @@
 package com.bitpay.cordova.qrscanner;
 
 import android.app.Activity;
-import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.Canvas;
-import android.graphics.ColorMatrix;
-import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Matrix;
-import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.Rect;
-import android.graphics.YuvImage;
 import android.hardware.Camera;
 import android.os.AsyncTask;
-import android.os.Environment;
 import android.os.Handler;
 import android.util.Base64;
 import android.util.Log;
-import android.view.View;
-import android.widget.FrameLayout;
 
-import androidx.annotation.Nullable;
 import androidx.exifinterface.media.ExifInterface;
 
-import com.cordovaplugincamerapreview.Preview;
 import com.google.android.gms.common.images.Size;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
@@ -43,10 +32,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.lang.ref.WeakReference;
-import java.util.Arrays;
-import java.util.Calendar;
 import java.util.List;
 import java.util.UUID;
 
@@ -58,12 +44,8 @@ public class CameraUtils {
     private static final int SCALE_FACTOR = 4;
     private static String photoPath;
 
-
-    private Camera.Parameters cameraParameters;
-    private int numberOfCameras;
     private int currentQuality;
 
-    public String defaultCamera;
     public boolean disableExifHeaderStripping;
     public boolean storeToFile = true;
 
@@ -101,7 +83,6 @@ public class CameraUtils {
     public void setEventListener(CameraUtils.CameraPreviewListener listener) {
         eventListener = listener;
     }
-
 
 
     Bitmap bitmap = null;
@@ -164,8 +145,8 @@ public class CameraUtils {
             new Thread(() -> {
                 if (bitmap != null) {
                     getCodeFromBitmap(Bitmap.createScaledBitmap(bitmap,
-                            bitmap.getWidth()/SCALE_FACTOR,   // big images do not supported
-                            bitmap.getHeight()/SCALE_FACTOR,
+                            bitmap.getWidth() / SCALE_FACTOR,   // big images do not supported
+                            bitmap.getHeight() / SCALE_FACTOR,
                             false));
                     bitmap = null;
                 }
@@ -189,15 +170,15 @@ public class CameraUtils {
                 .addOnSuccessListener(new OnSuccessListener<List<FirebaseVisionBarcode>>() {
                     @Override
                     public void onSuccess(List<FirebaseVisionBarcode> barcodes) {
-                        String message = composePluginResult(false, null,  null, 0).toString();
-                        for (FirebaseVisionBarcode barcode: barcodes) {
+                        String message = composePluginResult(false, null, null, 0).toString();
+                        for (FirebaseVisionBarcode barcode : barcodes) {
                             Point[] corners = barcode.getCornerPoints();
                             float currentRatio = calcCurrentRatio(corners);
                             boolean isAcceptableQuality = currentRatio >= CommonData.getInstance().qualityRatio;
                             String rawValue = barcode.getRawValue();
                             boolean matchesTargetUrl = (rawValue != null && rawValue.contains(CommonData.getInstance().targetUrl));
                             if (isAcceptableQuality && matchesTargetUrl) {
-                                JSONObject scanResult = composePluginResult(true, corners,  rawValue, currentRatio);
+                                JSONObject scanResult = composePluginResult(true, corners, rawValue, currentRatio);
                                 message = scanResult.toString();
                             }
                         }
@@ -244,22 +225,22 @@ public class CameraUtils {
         try {
             resultText = matchesTargetUrl ? resultText : "";
             JSONArray coordinates = new JSONArray();
-            coordinates.put(new Point(points[0].x * SCALE_FACTOR, points[0].y * SCALE_FACTOR));
-            coordinates.put(new Point(points[1].x * SCALE_FACTOR, points[1].y * SCALE_FACTOR));
-            coordinates.put(new Point(points[2].x * SCALE_FACTOR, points[2].y * SCALE_FACTOR));
-            coordinates.put(new Point(points[3].x * SCALE_FACTOR, points[3].y * SCALE_FACTOR));
+            for (Point point: points) {
+                JSONArray jsonPoints = new JSONArray();
+                jsonPoints.put(Integer.toString(point.x * SCALE_FACTOR));
+                jsonPoints.put(Integer.toString(point.y * SCALE_FACTOR));
+                coordinates.put(jsonPoints);
+            }
 
             data.put("fileName", photoPath);
             data.put("coords", coordinates);
             data.put("text", resultText);
-            data.put("relation", currentRatio);
+            data.put("relation", Float.toString(currentRatio));
         } catch (Exception e) {
             Log.e(TAG, "Failed to compose a result data", e);
         }
         return data;
     }
-
-
 
 
     public static Bitmap applyMatrix(Bitmap source, Matrix matrix) {
@@ -282,7 +263,6 @@ public class CameraUtils {
         }
         return 0;
     }
-
 
 
     private Camera.Size prepareRequestedSize(final int width, final int height) {
@@ -409,44 +389,35 @@ public class CameraUtils {
 
     public void takePicture(final int width, int height, final int quality) {
         Log.d(TAG, "CameraPreview takePicture width: " + width + ", height: " + height + ", quality: " + quality);
-            if (!CommonData.getInstance().isCanTakePicture()) {
-                return;
-            }
+        if (!CommonData.getInstance().isCanTakePicture()) {
+            return;
+        }
 
-            CommonData.getInstance().setCanTakePicture(false);
-        Camera mCamera  =    CommonData.getInstance().getCamera();
-//        camera.release();
-//
-//            Camera mCamera = Camera.open(currentCameraId);
-            Camera.Parameters params = mCamera.getParameters();
+        CommonData.getInstance().setCanTakePicture(false);
+        Camera mCamera = CommonData.getInstance().getCamera();
+        Camera.Parameters params = mCamera.getParameters();
 
         Size size = CameraSource.getPictureSize(mCamera, width, height);
-//            Camera.Size size = CameraSource.selectSizePair(mCamera, width, height).pictureSize();
-//        Camera.Size size = new Camera.Size()
-//                    getOptimalPictureSize(height, width, params.getPreviewSize(), params.getSupportedPictureSizes());
-            Log.d(TAG, "TAKE PICTURE SIZE width: " + size.getWidth() + ", size.height: " + size.getHeight());
-            params.setPictureSize(size.getWidth(), size.getHeight());
-            currentQuality = quality;
+        Log.d(TAG, "TAKE PICTURE SIZE width: " + size.getWidth() + ", size.height: " + size.getHeight());
+        params.setPictureSize(size.getWidth(), size.getHeight());
+        currentQuality = quality;
 
-            if (CommonData.getInstance().currentCameraId == Camera.CameraInfo.CAMERA_FACING_FRONT && !storeToFile) {
-                // The image will be recompressed in the callback
-                params.setJpegQuality(99);
-            } else {
-                params.setJpegQuality(quality);
-            }
+        if (CommonData.getInstance().currentCameraId == Camera.CameraInfo.CAMERA_FACING_FRONT && !storeToFile) {
+            // The image will be recompressed in the callback
+            params.setJpegQuality(99);
+        } else {
+            params.setJpegQuality(quality);
+        }
 
-            mCamera.setParameters(params);
+        mCamera.setParameters(params);
 
 
-            mCamera.startPreview();
-            new Handler().postDelayed(() -> {
-                mCamera.takePicture(shutterCallback, null, jpegPictureCallback);
-            }, 300L);
+        mCamera.startPreview();
+        new Handler().postDelayed(() -> {
+            mCamera.takePicture(shutterCallback, null, jpegPictureCallback);
+        }, 300L);
 
     }
-
-
-
 
 
     private Rect calculateTapArea(float x, float y, float coefficient) {

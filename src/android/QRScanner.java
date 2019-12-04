@@ -40,7 +40,7 @@ import java.util.concurrent.ExecutorService;
 import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 
-import androidx.core.app.ActivityCompat;
+import android.support.v4.app.ActivityCompat;
 
 import io.ionic.starter.R;
 

@@ -3,7 +3,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.google.firebase:firebase-ml-vision:20.0.0'
+    implementation 'com.google.firebase:firebase-ml-vision:23.0.0'
     implementation 'com.android.support:support-compat:27.1.1'
 }
 

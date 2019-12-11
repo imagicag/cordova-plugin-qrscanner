@@ -42,7 +42,7 @@ import android.widget.RelativeLayout;
 
 import android.support.v4.app.ActivityCompat;
 
-import io.ionic.starter.R;
+import ch.imagic.imsmobile.R;
 
 @SuppressWarnings("deprecation")
 public class QRScanner extends CordovaPlugin {

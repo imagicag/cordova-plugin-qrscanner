@@ -40,9 +40,9 @@ import java.util.concurrent.ExecutorService;
 import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 
-import androidx.core.app.ActivityCompat;
+import android.support.v4.app.ActivityCompat;
 
-import io.ionic.starter.R;
+import ch.imagic.imsmobile.R;
 
 @SuppressWarnings("deprecation")
 public class QRScanner extends CordovaPlugin {
@@ -91,6 +91,7 @@ public class QRScanner extends CordovaPlugin {
     @Override
     public void initialize(CordovaInterface cordova, CordovaWebView webView) {
         super.initialize(cordova, webView);
+        FirebaseApp.initializeApp(cordova.getContext());
 
         RelativeLayout rootView = (RelativeLayout) LayoutInflater.from(cordova.getContext()).inflate(R.layout.live_preview, null);
         preview = (CameraSourcePreview) rootView.getChildAt(0);
@@ -107,7 +108,6 @@ public class QRScanner extends CordovaPlugin {
         });
 
         CommonData.getInstance().setScannerModule(this);
-        FirebaseApp.initializeApp(cordova.getContext());
     }
 
     @Override

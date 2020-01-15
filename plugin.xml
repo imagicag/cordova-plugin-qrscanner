@@ -34,11 +34,11 @@
     <source-file src="src/android/frame_green.xml" target-dir="res/drawable" />
     <source-file src="src/android/frame_red.xml" target-dir="res/drawable" />
     <framework src="src/android/qrscanner.gradle" custom="true" type="gradleReference"/>
-    <framework src="com.google.firebase:firebase-common:19.+" />
+    <framework src="com.google.firebase:firebase-common:17.0.0" />
     <framework src="com.google.firebase:firebase-iid:18.0.0" />
-    <framework src="com.google.firebase:firebase-iid-interop:17.+" />
-    <framework src="com.google.firebase:firebase-ml-common:21.+" />
-    <framework src="com.google.firebase:firebase-ml-vision:23.+" />
+    <framework src="com.google.firebase:firebase-iid-interop:16.0.1" />
+    <framework src="com.google.firebase:firebase-ml-common:19.0.0" />
+    <framework src="com.google.firebase:firebase-ml-vision:20.0.0" />
   </platform>
   <platform name="ios">
     <config-file target="config.xml" parent="/*">

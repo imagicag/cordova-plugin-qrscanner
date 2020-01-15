@@ -395,28 +395,30 @@ public class CameraUtils {
 
         CommonData.getInstance().setCanTakePicture(false);
         Camera mCamera = CommonData.getInstance().getCamera();
-        Camera.Parameters params = mCamera.getParameters();
 
-        Size size = CameraSource.getPictureSize(mCamera, width, height);
-        Log.d(TAG, "TAKE PICTURE SIZE width: " + size.getWidth() + ", size.height: " + size.getHeight());
-        params.setPictureSize(size.getWidth(), size.getHeight());
-        currentQuality = quality;
+        new Thread() {
+            public void run() {
+                Camera.Parameters params = mCamera.getParameters();
 
-        if (CommonData.getInstance().currentCameraId == Camera.CameraInfo.CAMERA_FACING_FRONT && !storeToFile) {
-            // The image will be recompressed in the callback
-            params.setJpegQuality(99);
-        } else {
-            params.setJpegQuality(quality);
-        }
+                Size size = CameraSource.getPictureSize(mCamera, width, height);
+                Log.d(TAG, "TAKE PICTURE SIZE width: " + size.getWidth() + ", size.height: " + size.getHeight());
+                params.setPictureSize(size.getWidth(), size.getHeight());
+                currentQuality = quality;
 
-        mCamera.setParameters(params);
+                if (CommonData.getInstance().currentCameraId == Camera.CameraInfo.CAMERA_FACING_FRONT && !storeToFile) {
+                    // The image will be recompressed in the callback
+                    params.setJpegQuality(99);
+                } else {
+                    params.setJpegQuality(quality);
+                }
+
+                mCamera.setParameters(params);
 
 
-        mCamera.startPreview();
-        new Handler().postDelayed(() -> {
-            mCamera.takePicture(shutterCallback, null, jpegPictureCallback);
-        }, 300L);
-
+                mCamera.startPreview();
+                mCamera.takePicture(shutterCallback, null, jpegPictureCallback);
+            }
+        }.start();
     }
 
 

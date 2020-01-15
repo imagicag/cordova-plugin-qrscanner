@@ -625,7 +625,7 @@ public class QRScanner extends CordovaPlugin {
         cordova.getActivity().runOnUiThread(() -> {
             preview.setVisibility(View.GONE);
             webView.getView()
-                    .setBackgroundColor(Color.parseColor(BG_COLOR));
+                    .setBackgroundColor(Color.TRANSPARENT);
         });
         prepared = false;
         scanWasCalled = false;
